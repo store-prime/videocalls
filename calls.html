@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Videollamadas</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="call-container">
+        <h1>Videollamada Moderna</h1>
+        <div class="video-container">
+            <video id="localVideo" autoplay playsinline muted></video>
+            <video id="remoteVideo" autoplay playsinline></video>
+        </div>
+        <div class="controls">
+            <input type="text" id="callIdInput" placeholder="ID de la llamada" class="input-call">
+            <button id="startButton" class="btn gradient-btn">Iniciar</button>
+            <button id="joinButton" class="btn gradient-btn">Unirse</button>
+            <button id="hangupButton" class="btn gradient-btn" disabled>Colgar</button>
+            <button id="muteButton" class="btn control-btn">Silenciar Mic</button>
+            <button id="videoOffButton" class="btn control-btn">Apagar Cámara</button>
+        </div>
+        <button id="logoutButton" class="btn logout-btn">Cerrar Sesión</button>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
