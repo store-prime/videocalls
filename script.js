@@ -50,11 +50,18 @@ const configuration = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 };
 
+// Función para redirigir a calls.html
+function redirectToCalls() {
+    window.location.href = 'calls.html';
+}
+
 // Autenticación (index.html)
 if (loginForm) {
+    // Redirigir si ya está autenticado al cargar la página
     auth.onAuthStateChanged(user => {
         if (user && window.location.pathname.includes('index.html')) {
-            window.location.href = 'calls.html';
+            console.log('Usuario autenticado, redirigiendo a calls.html');
+            redirectToCalls();
         }
     });
 
@@ -63,8 +70,12 @@ if (loginForm) {
         const email = document.getElementById('loginEmail').value;
         const password = document.getElementById('loginPassword').value;
         try {
+            console.log('Intentando iniciar sesión con email/contraseña');
             await auth.signInWithEmailAndPassword(email, password);
+            console.log('Inicio de sesión exitoso con email/contraseña');
+            redirectToCalls();
         } catch (error) {
+            console.error('Error al iniciar sesión con email/contraseña:', error);
             alert('Error al iniciar sesión: ' + error.message);
         }
     });
@@ -74,8 +85,12 @@ if (loginForm) {
         const email = document.getElementById('signupEmail').value;
         const password = document.getElementById('signupPassword').value;
         try {
+            console.log('Intentando registrarse con email/contraseña');
             await auth.createUserWithEmailAndPassword(email, password);
+            console.log('Registro exitoso con email/contraseña');
+            redirectToCalls();
         } catch (error) {
+            console.error('Error al registrarse:', error);
             alert('Error al registrarse: ' + error.message);
         }
     });
@@ -84,11 +99,13 @@ if (loginForm) {
         e.preventDefault();
         const email = document.getElementById('forgotEmail').value;
         try {
+            console.log('Enviando correo de recuperación');
             await auth.sendPasswordResetEmail(email);
             alert('Correo de recuperación enviado. Revisa tu bandeja de entrada.');
             forgotContainer.style.display = 'none';
             loginContainer.style.display = 'flex';
         } catch (error) {
+            console.error('Error al enviar el correo de recuperación:', error);
             alert('Error al enviar el correo: ' + error.message);
         }
     });
@@ -96,27 +113,51 @@ if (loginForm) {
     googleLogin.addEventListener('click', async () => {
         const provider = new firebase.auth.GoogleAuthProvider();
         try {
-            await auth.signInWithPopup(provider);
+            console.log('Intentando iniciar sesión con Google');
+            const result = await auth.signInWithPopup(provider);
+            console.log('Inicio de sesión exitoso con Google:', result.user);
+            redirectToCalls();
         } catch (error) {
-            alert('Error con Google: ' + error.message);
+            console.error('Error con Google:', error);
+            if (error.code === 'auth/popup-blocked') {
+                alert('El pop-up fue bloqueado. Por favor, permite los pop-ups e intenta de nuevo.');
+            } else {
+                alert('Error con Google: ' + error.message);
+            }
         }
     });
 
     microsoftLogin.addEventListener('click', async () => {
         const provider = new firebase.auth.OAuthProvider('microsoft.com');
         try {
-            await auth.signInWithPopup(provider);
+            console.log('Intentando iniciar sesión con Microsoft');
+            const result = await auth.signInWithPopup(provider);
+            console.log('Inicio de sesión exitoso con Microsoft:', result.user);
+            redirectToCalls();
         } catch (error) {
-            alert('Error con Microsoft: ' + error.message);
+            console.error('Error con Microsoft:', error);
+            if (error.code === 'auth/popup-blocked') {
+                alert('El pop-up fue bloqueado. Por favor, permite los pop-ups e intenta de nuevo.');
+            } else {
+                alert('Error con Microsoft: ' + error.message);
+            }
         }
     });
 
     githubLogin.addEventListener('click', async () => {
         const provider = new firebase.auth.GithubAuthProvider();
         try {
-            await auth.signInWithPopup(provider);
+            console.log('Intentando iniciar sesión con GitHub');
+            const result = await auth.signInWithPopup(provider);
+            console.log('Inicio de sesión exitoso con GitHub:', result.user);
+            redirectToCalls();
         } catch (error) {
-            alert('Error con GitHub: ' + error.message);
+            console.error('Error con GitHub:', error);
+            if (error.code === 'auth/popup-blocked') {
+                alert('El pop-up fue bloqueado. Por favor, permite los pop-ups e intenta de nuevo.');
+            } else {
+                alert('Error con GitHub: ' + error.message);
+            }
         }
     });
 
@@ -149,6 +190,7 @@ if (loginForm) {
 if (callContainer) {
     auth.onAuthStateChanged(user => {
         if (!user) {
+            console.log('No hay usuario autenticado, redirigiendo a index.html');
             window.location.href = 'index.html';
         }
     });
@@ -158,7 +200,10 @@ if (callContainer) {
     hangupButton.addEventListener('click', hangup);
     muteButton.addEventListener('click', toggleMute);
     videoOffButton.addEventListener('click', toggleVideo);
-    logoutButton.addEventListener('click', () => auth.signOut());
+    logoutButton.addEventListener('click', () => {
+        console.log('Cerrando sesión');
+        auth.signOut();
+    });
 
     async function startCall(callId) {
         startButton.disabled = true;
@@ -206,6 +251,7 @@ if (callContainer) {
             });
 
         } catch (error) {
+            console.error('Error al iniciar la llamada:', error);
             alert('Error al iniciar la llamada: ' + error.message);
             hangup();
         }
@@ -260,6 +306,7 @@ if (callContainer) {
             });
 
         } catch (error) {
+            console.error('Error al unirse a la llamada:', error);
             alert('Error al unirse a la llamada: ' + error.message);
             hangup();
         }
