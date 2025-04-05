@@ -33,18 +33,22 @@ const backToLoginFromForgot = document.getElementById('backToLoginFromForgot');
 const callContainer = document.getElementById('callContainer');
 const localVideo = document.getElementById('localVideo');
 const remoteVideo = document.getElementById('remoteVideo');
-const startButton = document.getElementById('startButton');
-const joinButton = document.getElementById('joinButton');
 const hangupButton = document.getElementById('hangupButton');
 const muteButton = document.getElementById('muteButton');
 const videoOffButton = document.getElementById('videoOffButton');
-const callIdInput = document.getElementById('callIdInput');
 const logoutButton = document.getElementById('logoutButton');
+const usersList = document.getElementById('usersList');
+const incomingCall = document.getElementById('incomingCall');
+const callerName = document.getElementById('callerName');
+const acceptButton = document.getElementById('acceptButton');
+const rejectButton = document.getElementById('rejectButton');
 
 let localStream;
 let peerConnection;
 let isMuted = false;
 let isVideoOff = false;
+let currentCallId = null;
+let currentUser = null;
 
 const configuration = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -57,7 +61,6 @@ function redirectToCalls() {
 
 // Autenticación (index.html)
 if (loginForm) {
-    // Redirigir si ya está autenticado al cargar la página
     auth.onAuthStateChanged(user => {
         if (user && window.location.pathname.includes('index.html')) {
             console.log('Usuario autenticado, redirigiendo a calls.html');
@@ -188,28 +191,60 @@ if (loginForm) {
 
 // Videollamadas (calls.html)
 if (callContainer) {
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(async user => {
         if (!user) {
             console.log('No hay usuario autenticado, redirigiendo a index.html');
             window.location.href = 'index.html';
+        } else {
+            currentUser = user;
+            // Registrar usuario como conectado
+            await db.collection('users').doc(user.uid).set({
+                email: user.email,
+                displayName: user.displayName || user.email.split('@')[0],
+                online: true,
+                lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            // Escuchar usuarios conectados
+            listenForUsers();
+            // Escuchar llamadas entrantes
+            listenForIncomingCalls();
         }
     });
 
-    startButton.addEventListener('click', () => startCall(callIdInput.value || 'call1'));
-    joinButton.addEventListener('click', () => joinCall(callIdInput.value));
-    hangupButton.addEventListener('click', hangup);
-    muteButton.addEventListener('click', toggleMute);
-    videoOffButton.addEventListener('click', toggleVideo);
-    logoutButton.addEventListener('click', () => {
+    logoutButton.addEventListener('click', async () => {
         console.log('Cerrando sesión');
+        await db.collection('users').doc(currentUser.uid).update({ online: false });
         auth.signOut();
     });
 
-    async function startCall(callId) {
-        startButton.disabled = true;
-        joinButton.disabled = true;
-        hangupButton.disabled = false;
+    hangupButton.addEventListener('click', hangup);
+    muteButton.addEventListener('click', toggleMute);
+    videoOffButton.addEventListener('click', toggleVideo);
+    acceptButton.addEventListener('click', acceptCall);
+    rejectButton.addEventListener('click', rejectCall);
 
+    // Mostrar lista de usuarios conectados
+    function listenForUsers() {
+        db.collection('users').where('online', '==', true).onSnapshot(snapshot => {
+            usersList.innerHTML = '';
+            snapshot.forEach(doc => {
+                const user = doc.data();
+                if (doc.id !== currentUser.uid) { // No mostrar al usuario actual
+                    const li = document.createElement('li');
+                    li.textContent = user.displayName || user.email;
+                    const callButton = document.createElement('button');
+                    callButton.textContent = 'Llamar';
+                    callButton.onclick = () => startCall(doc.id, user.displayName || user.email);
+                    li.appendChild(callButton);
+                    usersList.appendChild(li);
+                }
+            });
+        });
+    }
+
+    // Iniciar una llamada
+    async function startCall(targetUserId, targetUserName) {
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             localVideo.srcObject = localStream;
@@ -221,27 +256,38 @@ if (callContainer) {
                 remoteVideo.srcObject = event.streams[0];
             };
 
+            currentCallId = `${currentUser.uid}-${targetUserId}-${Date.now()}`;
+            hangupButton.disabled = false;
+
             peerConnection.onicecandidate = event => {
                 if (event.candidate) {
-                    db.collection('calls').doc(callId).collection('callerCandidates').add(event.candidate.toJSON());
+                    db.collection('calls').doc(currentCallId).collection('callerCandidates').add(event.candidate.toJSON());
                 }
             };
 
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
-            await db.collection('calls').doc(callId).set({
-                offer: { type: offer.type, sdp: offer.sdp }
+
+            await db.collection('calls').doc(currentCallId).set({
+                callerId: currentUser.uid,
+                targetId: targetUserId,
+                offer: { type: offer.type, sdp: offer.sdp },
+                status: 'pending',
+                callerName: currentUser.displayName || currentUser.email.split('@')[0]
             });
 
-            db.collection('calls').doc(callId).onSnapshot(async snapshot => {
+            db.collection('calls').doc(currentCallId).onSnapshot(async snapshot => {
                 const data = snapshot.data();
-                if (!peerConnection.currentRemoteDescription && data && data.answer) {
+                if (data && data.status === 'accepted' && !peerConnection.currentRemoteDescription && data.answer) {
                     const answer = new RTCSessionDescription(data.answer);
                     await peerConnection.setRemoteDescription(answer);
+                } else if (data && data.status === 'rejected') {
+                    alert(`${targetUserName} rechazó la llamada.`);
+                    hangup();
                 }
             });
 
-            db.collection('calls').doc(callId).collection('calleeCandidates').onSnapshot(snapshot => {
+            db.collection('calls').doc(currentCallId).collection('calleeCandidates').onSnapshot(snapshot => {
                 snapshot.docChanges().forEach(async change => {
                     if (change.type === 'added') {
                         const candidate = new RTCIceCandidate(change.doc.data());
@@ -257,15 +303,23 @@ if (callContainer) {
         }
     }
 
-    async function joinCall(callId) {
-        if (!callId) {
-            alert('Por favor, ingresa un ID de llamada.');
-            return;
-        }
-        startButton.disabled = true;
-        joinButton.disabled = true;
-        hangupButton.disabled = false;
+    // Escuchar llamadas entrantes
+    function listenForIncomingCalls() {
+        db.collection('calls').where('targetId', '==', currentUser.uid).where('status', '==', 'pending')
+            .onSnapshot(snapshot => {
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === 'added') {
+                        const callData = change.doc.data();
+                        currentCallId = change.doc.id;
+                        callerName.textContent = callData.callerName;
+                        incomingCall.style.display = 'block';
+                    }
+                });
+            });
+    }
 
+    // Aceptar llamada
+    async function acceptCall() {
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             localVideo.srcObject = localStream;
@@ -279,24 +333,23 @@ if (callContainer) {
 
             peerConnection.onicecandidate = event => {
                 if (event.candidate) {
-                    db.collection('calls').doc(callId).collection('calleeCandidates').add(event.candidate.toJSON());
+                    db.collection('calls').doc(currentCallId).collection('calleeCandidates').add(event.candidate.toJSON());
                 }
             };
 
-            const callDoc = db.collection('calls').doc(callId);
+            const callDoc = db.collection('calls').doc(currentCallId);
             const callData = (await callDoc.get()).data();
-            if (!callData) {
-                throw new Error('No se encontró la llamada con ese ID.');
-            }
-
             const offer = callData.offer;
             await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
 
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
-            await callDoc.update({ answer: { type: answer.type, sdp: answer.sdp } });
+            await callDoc.update({
+                answer: { type: answer.type, sdp: answer.sdp },
+                status: 'accepted'
+            });
 
-            db.collection('calls').doc(callId).collection('callerCandidates').onSnapshot(snapshot => {
+            db.collection('calls').doc(currentCallId).collection('callerCandidates').onSnapshot(snapshot => {
                 snapshot.docChanges().forEach(async change => {
                     if (change.type === 'added') {
                         const candidate = new RTCIceCandidate(change.doc.data());
@@ -305,27 +358,38 @@ if (callContainer) {
                 });
             });
 
+            incomingCall.style.display = 'none';
+            hangupButton.disabled = false;
+
         } catch (error) {
-            console.error('Error al unirse a la llamada:', error);
-            alert('Error al unirse a la llamada: ' + error.message);
+            console.error('Error al aceptar la llamada:', error);
+            alert('Error al aceptar la llamada: ' + error.message);
             hangup();
         }
     }
 
+    // Rechazar llamada
+    async function rejectCall() {
+        await db.collection('calls').doc(currentCallId).update({ status: 'rejected' });
+        incomingCall.style.display = 'none';
+        currentCallId = null;
+    }
+
+    // Colgar llamada
     async function hangup() {
         if (peerConnection) peerConnection.close();
         if (localStream) localStream.getTracks().forEach(track => track.stop());
         localVideo.srcObject = null;
         remoteVideo.srcObject = null;
-        startButton.disabled = false;
-        joinButton.disabled = false;
         hangupButton.disabled = true;
 
-        const callId = callIdInput.value || 'call1';
-        const callDoc = db.collection('calls').doc(callId);
-        await callDoc.collection('callerCandidates').get().then(s => s.forEach(d => d.ref.delete()));
-        await callDoc.collection('calleeCandidates').get().then(s => s.forEach(d => d.ref.delete()));
-        await callDoc.delete();
+        if (currentCallId) {
+            const callDoc = db.collection('calls').doc(currentCallId);
+            await callDoc.collection('callerCandidates').get().then(s => s.forEach(d => d.ref.delete()));
+            await callDoc.collection('calleeCandidates').get().then(s => s.forEach(d => d.ref.delete()));
+            await callDoc.delete();
+            currentCallId = null;
+        }
 
         peerConnection = null;
         localStream = null;
