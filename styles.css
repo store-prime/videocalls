@@ -216,6 +216,8 @@ body {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
     backdrop-filter: blur(10px);
     text-align: center;
+    width: 80%;
+    max-width: 800px;
 }
 
 h1 {
@@ -224,10 +226,51 @@ h1 {
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
+.users-container {
+    margin-bottom: 20px;
+}
+
+.users-container h2 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+}
+
+#usersList {
+    list-style: none;
+    padding: 0;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+#usersList li {
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    margin-bottom: 5px;
+    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#usersList li button {
+    background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+    border: none;
+    padding: 5px 10px;
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+}
+
+#usersList li button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
 .video-container {
     display: flex;
     gap: 20px;
     margin-bottom: 30px;
+    justify-content: center;
 }
 
 video {
@@ -248,15 +291,6 @@ video:hover {
     gap: 15px;
     justify-content: center;
     flex-wrap: wrap;
-}
-
-.input-call {
-    padding: 12px;
-    border-radius: 25px;
-    border: none;
-    background: rgba(255, 255, 255, 0.1);
-    color: #f1f5f9;
-    font-size: 16px;
 }
 
 .btn {
@@ -296,4 +330,26 @@ video:hover {
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.incoming-call {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    color: white;
+    text-align: center;
+}
+
+.incoming-call p {
+    margin-bottom: 15px;
+    font-size: 1.2rem;
+}
+
+.incoming-call button {
+    margin: 0 10px;
 }
